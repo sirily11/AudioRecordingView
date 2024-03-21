@@ -33,7 +33,7 @@ public struct VisulizationConfiguration {
     A view that allows you to record audio and visualize the waveform
  */
 public struct RecordingView<VisulizationView: View>: View {
-    @EnvironmentObject var recorder: AudioManager
+    @StateObject var recorder: AudioManager = .init()
     @State var isRecording = false
     @State var showVisulization = false
 
@@ -130,6 +130,12 @@ public struct RecordingView<VisulizationView: View>: View {
             recorder.configuration = recordingConfiguration
         }
         .padding()
+        .onAppear {
+            recorder.startEngine()
+        }
+        .onDisappear {
+            recorder.stopEngine()
+        }
     }
 }
 

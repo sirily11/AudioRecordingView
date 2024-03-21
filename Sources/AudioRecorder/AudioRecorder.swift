@@ -27,10 +27,13 @@ public struct AudioManagerConfiguration {
 
 public class AudioManager: ObservableObject {
     let engine = AudioEngine()
+    let engine2 = AudioEngine()
     let recorder: NodeRecorder
     let player = AudioPlayer()
     let mixer = Mixer()
     var ffttap: FFTTap?
+
+    let tapnodeA: Fader
 
     public var configuration: AudioManagerConfiguration
     @Published public var amplitudes: [Float] = []
@@ -39,17 +42,28 @@ public class AudioManager: ObservableObject {
         guard let input = engine.input else {
             fatalError()
         }
-        do {
-            recorder = try NodeRecorder(node: input, shouldCleanupRecordings: false)
-        } catch let err {
-            fatalError("\(err)")
-        }
-        let silencer = Fader(input, gain: 0)
 
-        mixer.addInput(silencer)
-        mixer.addInput(player)
-        engine.output = mixer
+        recorder = try! NodeRecorder(node: input, shouldCleanupRecordings: false)
+        let mic = input
+        tapnodeA = Fader(mic)
+        let silencer = Fader(tapnodeA, gain: 0)
+
+        engine.output = silencer
         self.configuration = configuration
+    }
+
+    /**
+     Start the audio engine
+     */
+    public func startEngine() {
+        try? engine.start()
+    }
+
+    /**
+     Stop the audio engine
+     */
+    public func stopEngine() {
+        engine.stop()
     }
 
     /**
@@ -59,11 +73,10 @@ public class AudioManager: ObservableObject {
     public func startRecording() {
         do {
             Task {
-                ffttap = FFTTap(engine.input!, callbackQueue: .global()) { _ in }
+                ffttap = FFTTap(tapnodeA, callbackQueue: .global()) { _ in }
                 ffttap?.isNormalized = false
                 ffttap?.start()
             }
-            try engine.start()
             try recorder.record()
         } catch let err {
             fatalError("\(err)")
@@ -77,8 +90,6 @@ public class AudioManager: ObservableObject {
         guard let audioFile = recorder.audioFile else {
             return
         }
-        print("Data: \(audioFile.toFloatChannelData()?.first ?? [])")
-
         recorder.stop()
         ffttap?.stop()
     }
@@ -93,6 +104,9 @@ public class AudioManager: ObservableObject {
         return audioFile.toFloatChannelData()?.first ?? []
     }
 
+    /**
+     Get the latest amplitudes and update the state
+     */
     public func refreshAmplitudes() {
         if let ffttap = ffttap {
             updateAmplitudes(ffttap.fftData)
